@@ -1,0 +1,61 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+
+#define MAX_CHILD 5
+
+int pipe_fd[2];  
+pid_t children[MAX_CHILD];  
+int number_children = 0;  
+
+
+void interrupt_handler(int sig) {
+    printf("\nInterrupt received. Exiting...\n");
+    exit(0);
+}
+
+void create_child() {
+    if (number_children == MAX_CHILD) {
+        printf("Maximum number of child processes reached.\n");
+        return;
+    }
+    pid_t pid = fork();
+    if (pid == 0) {  
+        char message[100];
+        close(pipe_fd[1]);  
+        while (1) {
+            read(pipe_fd[0], message, sizeof(message)); 
+            printf("Child %d received message: %s", getpid(), message);
+        }
+    } else if (pid > 0) {  
+        children[number_children] = pid;
+        number_children++;
+        close(pipe_fd[0]);  
+        printf("Child %d created.\n", pid);
+    } else {  // fork failed
+        printf("Failed to create child process.\n");
+    }
+}
+
+int main() {
+    signal(SIGINT, interrupt_handler); 
+
+    if (pipe(pipe_fd) == -1) { 
+        printf("Failed to create pipe.\n");
+        return 1;
+    }
+
+    while (1) {
+        char message[100];
+        printf("Enter message for child process(es): ");
+        fgets(message, sizeof(message), stdin);
+        if (strlen(message) > 1) {  // ignore empty input
+            for (int i = 0; i < number_children; i++) {
+                write(pipe_fd[1], message, strlen(message));  // write to pipe
+            }
+        }
+    }
+    return 0;
+}
